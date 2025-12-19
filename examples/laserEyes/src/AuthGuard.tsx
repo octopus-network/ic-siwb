@@ -2,6 +2,7 @@
 import React from 'react';
 
 import LoginPage from './components/login/LoginPage';
+import IdentityExpiredAlert from './components/IdentityExpiredAlert';
 import { useSiwbIdentity } from 'ic-siwb-lasereyes-connector';
 
 type AuthGuardProps = {
@@ -9,7 +10,7 @@ type AuthGuardProps = {
 };
 
 export default function AuthGuard({ children }: AuthGuardProps) {
-  const { isInitializing, identity } = useSiwbIdentity();
+  const { isInitializing, identity, isIdentityExpired } = useSiwbIdentity();
 
   // If the user is not connected, clear the session.
 
@@ -23,8 +24,18 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   // If wallet is not connected or there is no identity, show login page.
   if (!isInitializing && !identity) {
-    return <LoginPage />;
+    return (
+      <>
+        {isIdentityExpired && <IdentityExpiredAlert />}
+        <LoginPage />
+      </>
+    );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {isIdentityExpired && <IdentityExpiredAlert />}
+      {children}
+    </>
+  );
 }

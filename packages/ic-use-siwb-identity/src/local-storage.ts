@@ -1,4 +1,4 @@
-import { DelegationChain, DelegationIdentity, Ed25519KeyIdentity } from '@dfinity/identity';
+import { DelegationChain, DelegationIdentity, Ed25519KeyIdentity, isDelegationValid } from '@dfinity/identity';
 
 import type { SiwbIdentityStorage } from './storage.type';
 
@@ -6,6 +6,7 @@ const STORAGE_KEY = 'siwbIdentity';
 
 /**
  * Loads the SIWB identity from local storage.
+ * @throws {Error} If no identity is found, the stored state is invalid, or the delegation has expired.
  */
 export function loadIdentity() {
   const storedState = localStorage.getItem(STORAGE_KEY);
@@ -20,6 +21,14 @@ export function loadIdentity() {
   }
 
   const d = DelegationChain.fromJSON(JSON.stringify(s.delegationChain));
+  
+  // Verify that the delegation isn't expired.
+  if (!isDelegationValid(d)) {
+    // Clear the expired identity from local storage.
+    clearIdentity();
+    throw new Error('Stored identity has expired.');
+  }
+
   const i = DelegationIdentity.fromDelegation(Ed25519KeyIdentity.fromJSON(JSON.stringify(s.sessionIdentity)), d);
 
   return [s.address, i, d] as const;

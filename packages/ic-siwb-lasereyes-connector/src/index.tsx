@@ -431,6 +431,9 @@ export type SiwbIdentityContextType = {
   getPublicKey: () => string | undefined;
 
   setLaserEyes: (laserEyes: LaserEyesContextType, providerType?: ProviderType) => Promise<void>;
+
+  /** Indicates if the stored identity has expired. */
+  isIdentityExpired?: boolean;
 };
 
 export const SiwbIdentityContext = createContext<SiwbIdentityContextType | undefined>(undefined);
@@ -652,6 +655,7 @@ export function SiwbIdentityProvider<T extends verifierService>({
       identityPublicKey: publickeyHex,
       identity,
       delegationChain,
+      isIdentityExpired: false,
     });
 
     loginPromiseHandlers.current?.resolve(identity);
@@ -747,6 +751,49 @@ export function SiwbIdentityProvider<T extends verifierService>({
   }
 
   /**
+   * Checks if the current identity in memory has expired and handles expiration.
+   * If expired, clears all state and local storage, disconnects wallet, and sets expired flag.
+   */
+  function checkAndHandleIdentityExpiration() {
+    if (!state.identity || !state.delegationChain) {
+      return false;
+    }
+
+    // Check if delegation chain is expired
+    if (!isDelegationValid(state.delegationChain)) {
+      console.log('Identity in memory has expired. Clearing state and disconnecting...');
+      
+      // Clear all state including wallet connection
+      updateState({
+        isInitializing: false,
+        prepareLoginStatus: 'idle',
+        prepareLoginError: undefined,
+        siwbMessage: undefined,
+        loginStatus: 'idle',
+        loginError: undefined,
+        identity: undefined,
+        identityAddress: undefined,
+        identityPublicKey: undefined,
+        delegationChain: undefined,
+        connectedBtcAddress: undefined, // Disconnect wallet
+        connectedBtcPublicKey: undefined, // Clear public key
+        provider: undefined, // Clear provider
+        selectedProvider: undefined, // Clear selected provider
+        network: undefined, // Clear network
+        signMessageType: undefined,
+        isIdentityExpired: true, // Set expired flag
+      });
+      
+      // Clear localStorage to prevent confusion
+      clearIdentity();
+      
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
    * Clears the state and local storage. Effectively "logs the user out".
    */
   function clear() {
@@ -764,6 +811,7 @@ export function SiwbIdentityProvider<T extends verifierService>({
       connectedBtcAddress: undefined,
       connectedBtcPublicKey: undefined,
       signMessageType: undefined,
+      isIdentityExpired: false,
     });
     clearIdentity();
   }
@@ -774,23 +822,57 @@ export function SiwbIdentityProvider<T extends verifierService>({
   useEffect(() => {
     try {
       const [a, p, i, d] = loadIdentity();
-
-      updateState({
-        identityAddress: a,
-        identityPublicKey: p,
-        identity: i,
-        delegationChain: d,
-        isInitializing: false,
-      });
+      // Verify the loaded identity is still valid
+      if (!isDelegationValid(d)) {
+        // Identity in localStorage is expired, clear it
+        clearIdentity();
+        updateState({
+          isInitializing: false,
+          isIdentityExpired: true,
+        });
+      } else {
+        updateState({
+          identityAddress: a,
+          identityPublicKey: p,
+          identity: i,
+          delegationChain: d,
+          isInitializing: false,
+          isIdentityExpired: false,
+        });
+      }
     } catch (e) {
       if (e instanceof Error) {
         console.log('Could not load identity from local storage: ', e.message);
+        // Check if the error is due to expired identity
+        const isExpired = e.message.includes('expired');
+        updateState({
+          isInitializing: false,
+          isIdentityExpired: isExpired,
+        });
+      } else {
+        updateState({
+          isInitializing: false,
+          isIdentityExpired: false,
+        });
       }
-      updateState({
-        isInitializing: false,
-      });
     }
   }, []);
+
+  /**
+   * Periodically check if the identity in memory has expired.
+   * Check every 30 seconds to catch expiration in real-time.
+   */
+  useEffect(() => {
+    if (state.isInitializing) return;
+    if (!state.identity || !state.delegationChain) return;
+
+    const checkInterval = setInterval(() => {
+      checkAndHandleIdentityExpiration();
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(checkInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.identity, state.delegationChain, state.isInitializing]);
 
   /**
    * On address change, reset the state. Action is conditional on state.isInitializing
@@ -801,6 +883,12 @@ export function SiwbIdentityProvider<T extends verifierService>({
     clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.connectedBtcAddress]);
+
+  /**
+   * Note: We removed auto re-login on expiration.
+   * When identity expires, we disconnect the wallet and require user to reconnect manually.
+   * This ensures the user is aware of the expiration and can choose to reconnect.
+   */
 
   /**
    * Create an anonymous actor on mount. This actor is used during the login
@@ -838,6 +926,7 @@ export function SiwbIdentityProvider<T extends verifierService>({
         getAddress,
         getPublicKey,
         clear,
+        isIdentityExpired: state.isIdentityExpired,
       }}
     >
       {children}

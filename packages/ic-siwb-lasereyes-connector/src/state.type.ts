@@ -25,4 +25,5 @@ export type State = {
   identityPublicKey?: string;
   delegationChain?: DelegationChain;
   signMessageType?: SignMessageType;
+  isIdentityExpired?: boolean;
 };
