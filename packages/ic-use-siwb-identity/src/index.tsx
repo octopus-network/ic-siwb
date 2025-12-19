@@ -425,13 +425,24 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
           isIdentityExpired: true,
         });
       } else {
-        updateState({
-          identityAddress: a,
-          identity: i,
-          delegationChain: d,
-          isInitializing: false,
-          isIdentityExpired: false,
-        });
+        // Check if the loaded identity address matches the currently connected address
+        // If connectedBtcAddress is already set and doesn't match, clear the identity
+        if (state.connectedBtcAddress && state.connectedBtcAddress !== a) {
+          console.log('Loaded identity address does not match connected address. Clearing identity.');
+          clearIdentity();
+          updateState({
+            isInitializing: false,
+            isIdentityExpired: false,
+          });
+        } else {
+          updateState({
+            identityAddress: a,
+            identity: i,
+            delegationChain: d,
+            isInitializing: false,
+            isIdentityExpired: false,
+          });
+        }
       }
     } catch (e) {
       if (e instanceof Error) {
@@ -449,7 +460,25 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
         });
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Verify identity address matches connected address when wallet is connected.
+   * This handles the case where identity was loaded before wallet connection.
+   */
+  useEffect(() => {
+    if (state.isInitializing) return;
+    if (!state.connectedBtcAddress) return;
+    if (!state.identityAddress) return;
+
+    // If the identity address doesn't match the connected address, clear everything
+    if (state.identityAddress !== state.connectedBtcAddress) {
+      console.log('Identity address does not match connected address. Clearing identity.');
+      clear();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.connectedBtcAddress, state.identityAddress, state.isInitializing]);
 
   /**
    * Periodically check if the identity in memory has expired.
