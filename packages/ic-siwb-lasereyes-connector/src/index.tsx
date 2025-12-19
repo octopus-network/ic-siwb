@@ -431,6 +431,9 @@ export type SiwbIdentityContextType = {
   getPublicKey: () => string | undefined;
 
   setLaserEyes: (laserEyes: LaserEyesContextType, providerType?: ProviderType) => Promise<void>;
+
+  /** Indicates if the stored identity has expired. */
+  isIdentityExpired?: boolean;
 };
 
 export const SiwbIdentityContext = createContext<SiwbIdentityContextType | undefined>(undefined);
@@ -488,6 +491,7 @@ export function SiwbIdentityProvider<T extends verifierService>({
     prepareLoginStatus: 'idle',
     loginStatus: 'idle',
     selectedProvider: undefined,
+    isIdentityExpired: false,
   });
 
   function updateState(newState: Partial<State>) {
@@ -652,6 +656,7 @@ export function SiwbIdentityProvider<T extends verifierService>({
       identityPublicKey: publickeyHex,
       identity,
       delegationChain,
+      isIdentityExpired: false,
     });
 
     loginPromiseHandlers.current?.resolve(identity);
@@ -764,6 +769,7 @@ export function SiwbIdentityProvider<T extends verifierService>({
       connectedBtcAddress: undefined,
       connectedBtcPublicKey: undefined,
       signMessageType: undefined,
+      isIdentityExpired: false,
     });
     clearIdentity();
   }
@@ -795,10 +801,18 @@ export function SiwbIdentityProvider<T extends verifierService>({
     } catch (e) {
       if (e instanceof Error) {
         console.log('Could not load identity from local storage: ', e.message);
+        // Check if the error is due to expired identity
+        const isExpired = e.message.includes('expired');
+        updateState({
+          isInitializing: false,
+          isIdentityExpired: isExpired,
+        });
+      } else {
+        updateState({
+          isInitializing: false,
+          isIdentityExpired: false,
+        });
       }
-      updateState({
-        isInitializing: false,
-      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -872,6 +886,7 @@ export function SiwbIdentityProvider<T extends verifierService>({
         getAddress,
         getPublicKey,
         clear,
+        isIdentityExpired: state.isIdentityExpired,
       }}
     >
       {children}

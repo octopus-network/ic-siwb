@@ -99,6 +99,7 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
     prepareLoginStatus: 'idle',
     loginStatus: 'idle',
     selectedProvider: undefined,
+    isIdentityExpired: false,
   });
 
   function updateState(newState: Partial<State>) {
@@ -253,6 +254,7 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
       identityAddress: state.connectedBtcAddress,
       identity,
       delegationChain,
+      isIdentityExpired: false,
     });
 
     loginPromiseHandlers.current?.resolve(identity);
@@ -363,6 +365,7 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
       delegationChain: undefined,
       connectedBtcAddress: undefined,
       signMessageType: undefined,
+      isIdentityExpired: false,
     });
     clearIdentity();
   }
@@ -393,10 +396,18 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
     } catch (e) {
       if (e instanceof Error) {
         console.log('Could not load identity from local storage: ', e.message);
+        // Check if the error is due to expired identity
+        const isExpired = e.message.includes('expired');
+        updateState({
+          isInitializing: false,
+          isIdentityExpired: isExpired,
+        });
+      } else {
+        updateState({
+          isInitializing: false,
+          isIdentityExpired: false,
+        });
       }
-      updateState({
-        isInitializing: false,
-      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -469,6 +480,7 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
         signMessageError,
         getAddress,
         clear,
+        isIdentityExpired: state.isIdentityExpired,
       }}
     >
       {children}
