@@ -89,7 +89,4 @@ export type SiwbIdentityContextType = {
 
   /** We don't have things like rainbow kit right now, so we have to manually return btc address */
   getAddress: () => string | undefined;
-
-  /** Indicates if the stored identity has expired. */
-  isIdentityExpired?: boolean;
 };

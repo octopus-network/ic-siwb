@@ -2,7 +2,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, type ReactNode, useEffect, useState, useRef } from 'react';
 import { type ActorConfig, type HttpAgentOptions } from '@dfinity/agent';
-import { DelegationIdentity, Ed25519KeyIdentity, isDelegationValid } from '@dfinity/identity';
+import { DelegationIdentity, Ed25519KeyIdentity } from '@dfinity/identity';
 import type { SiwbIdentityContextType } from './context.type';
 
 import { IDL } from '@dfinity/candid';
@@ -253,7 +253,6 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
       identityAddress: state.connectedBtcAddress,
       identity,
       delegationChain,
-      isIdentityExpired: false,
     });
 
     loginPromiseHandlers.current?.resolve(identity);
@@ -349,47 +348,6 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
   }
 
   /**
-   * Checks if the current identity in memory has expired and handles expiration.
-   * If expired, clears all state and local storage, disconnects wallet, and sets expired flag.
-   */
-  function checkAndHandleIdentityExpiration() {
-    if (!state.identity || !state.delegationChain) {
-      return false;
-    }
-
-    // Check if delegation chain is expired
-    if (!isDelegationValid(state.delegationChain)) {
-      console.log('Identity in memory has expired. Clearing state and disconnecting...');
-      
-      // Clear all state including wallet connection
-      updateState({
-        isInitializing: false,
-        prepareLoginStatus: 'idle',
-        prepareLoginError: undefined,
-        siwbMessage: undefined,
-        loginStatus: 'idle',
-        loginError: undefined,
-        identity: undefined,
-        identityAddress: undefined,
-        delegationChain: undefined,
-        connectedBtcAddress: undefined, // Disconnect wallet
-        provider: undefined, // Clear provider
-        selectedProvider: undefined, // Clear selected provider
-        network: undefined, // Clear network
-        signMessageType: undefined,
-        isIdentityExpired: true, // Set expired flag
-      });
-      
-      // Clear localStorage to prevent confusion
-      clearIdentity();
-      
-      return true;
-    }
-    
-    return false;
-  }
-
-  /**
    * Clears the state and local storage. Effectively "logs the user out".
    */
   function clear() {
@@ -405,7 +363,6 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
       delegationChain: undefined,
       connectedBtcAddress: undefined,
       signMessageType: undefined,
-      isIdentityExpired: false,
     });
     clearIdentity();
   }
@@ -416,49 +373,30 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
   useEffect(() => {
     try {
       const [a, i, d] = loadIdentity();
-      // Verify the loaded identity is still valid
-      if (!isDelegationValid(d)) {
-        // Identity in localStorage is expired, clear it
+      
+      // Check if the loaded identity address matches the currently connected address
+      // If connectedBtcAddress is already set and doesn't match, clear the identity
+      if (state.connectedBtcAddress && state.connectedBtcAddress !== a) {
+        console.log('Loaded identity address does not match connected address. Clearing identity.');
         clearIdentity();
         updateState({
           isInitializing: false,
-          isIdentityExpired: true,
         });
       } else {
-        // Check if the loaded identity address matches the currently connected address
-        // If connectedBtcAddress is already set and doesn't match, clear the identity
-        if (state.connectedBtcAddress && state.connectedBtcAddress !== a) {
-          console.log('Loaded identity address does not match connected address. Clearing identity.');
-          clearIdentity();
-          updateState({
-            isInitializing: false,
-            isIdentityExpired: false,
-          });
-        } else {
-          updateState({
-            identityAddress: a,
-            identity: i,
-            delegationChain: d,
-            isInitializing: false,
-            isIdentityExpired: false,
-          });
-        }
+        updateState({
+          identityAddress: a,
+          identity: i,
+          delegationChain: d,
+          isInitializing: false,
+        });
       }
     } catch (e) {
       if (e instanceof Error) {
         console.log('Could not load identity from local storage: ', e.message);
-        // Check if the error is due to expired identity
-        const isExpired = e.message.includes('expired');
-        updateState({
-          isInitializing: false,
-          isIdentityExpired: isExpired,
-        });
-      } else {
-        updateState({
-          isInitializing: false,
-          isIdentityExpired: false,
-        });
       }
+      updateState({
+        isInitializing: false,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -479,22 +417,6 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.connectedBtcAddress, state.identityAddress, state.isInitializing]);
-
-  /**
-   * Periodically check if the identity in memory has expired.
-   * Check every 30 seconds to catch expiration in real-time.
-   */
-  useEffect(() => {
-    if (state.isInitializing) return;
-    if (!state.identity || !state.delegationChain) return;
-
-    const checkInterval = setInterval(() => {
-      checkAndHandleIdentityExpiration();
-    }, 30000); // Check every 30 seconds
-
-    return () => clearInterval(checkInterval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.identity, state.delegationChain, state.isInitializing]);
 
   /**
    * On address change, reset the state. Action is conditional on state.isInitializing
@@ -547,7 +469,6 @@ export function SiwbIdentityProvider<T extends SIWB_IDENTITY_SERVICE>({
         signMessageError,
         getAddress,
         clear,
-        isIdentityExpired: state.isIdentityExpired,
       }}
     >
       {children}
