@@ -1,5 +1,6 @@
 use ic_cdk::query;
 use ic_siwb::utils::{get_script_from_address, AddressInfo};
+use ic_siwb::with_settings;
 use serde_bytes::ByteBuf;
 
 use crate::service::types::AddressScriptBuf;
@@ -23,7 +24,23 @@ fn get_principal(address: String) -> Result<ByteBuf, String> {
     })?;
 
     // Create an BtcAddress from the string. This validates the address.
-    let AddressInfo { script_buf, .. } = get_script_from_address(address)?;
+    let AddressInfo {
+        script_buf,
+        network: address_network,
+        ..
+    } = get_script_from_address(address)?;
+
+    // Check if the address network matches the configured network in settings
+    let configured_network = with_settings!(|settings: &ic_siwb::settings::Settings| {
+        settings.network
+    });
+    
+    if address_network != configured_network {
+        return Err(format!(
+            "Address network mismatch: address is {:?} but settings network is {:?}",
+            address_network, configured_network
+        ));
+    }
 
     ADDRESS_PRINCIPAL.with(|ap| {
         ap.borrow()
