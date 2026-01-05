@@ -7,7 +7,7 @@ use ic_stable_structures::Storable;
 pub struct AddressScriptBuf(pub Vec<u8>);
 
 impl Storable for AddressScriptBuf {
-    fn to_bytes(&self) -> Cow<[u8]> {
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
         self.0.to_bytes()
     }
 

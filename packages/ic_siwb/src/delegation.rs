@@ -143,10 +143,10 @@ pub fn create_delegation(
 /// * `seed`: The unique seed identifying the delegation.
 /// * `delegation_hash`: The hash of the delegation.
 pub fn witness(
-    signature_map: &SignatureMap,
+    signature_map: &'_ SignatureMap,
     seed: Hash,
     delegation_hash: Hash,
-) -> Result<HashTree, DelegationError> {
+) -> Result<HashTree<'_>, DelegationError> {
     let witness = signature_map
         .witness(hash::hash_bytes(seed), delegation_hash)
         .ok_or(DelegationError::SignatureNotFound)?;

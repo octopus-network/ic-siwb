@@ -29,7 +29,7 @@ thread_local! {
 
     // The settings control the behavior of the SIWB library. The settings must be initialized
     // before any other library functions are called.
-    static SETTINGS: RefCell<Option<Settings>> = RefCell::new(None);
+    pub static SETTINGS: RefCell<Option<Settings>> = RefCell::new(None);
 
     // SIWB messages are stored in global state during the login process. The key is the
     // Bitcoin address as a byte array and the value is the SIWB message. After a successful
