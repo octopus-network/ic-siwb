@@ -3,7 +3,8 @@ use ic_cdk::api::is_controller;
 use ic_cdk::update;
 
 use ic_siwb::login::{BtcSignature, LoginDetails, SignMessageType};
-use ic_siwb::utils::get_script_from_address;
+use ic_siwb::utils::{get_script_from_address, AddressInfo};
+use ic_siwb::with_settings;
 use ic_stable_structures::storable::Blob;
 use serde_bytes::ByteBuf;
 
@@ -33,7 +34,24 @@ fn siwb_login(
         let signature_map = &mut *state.signature_map.borrow_mut();
 
         // Create an BtcAddress from the string. This validates the address.
-        let address = get_script_from_address(address)?;
+        let AddressInfo {
+            address_raw,
+            script_buf,
+            network: address_network,
+            ..
+        } = get_script_from_address(address)?;
+
+        // Check if the address network matches the configured network in settings
+        let configured_network = with_settings!(|settings: &ic_siwb::settings::Settings| {
+            settings.network
+        });
+        
+        if address_network != configured_network {
+            return Err(format!(
+                "Address network mismatch: address is {:?} but settings network is {:?}",
+                address_network, configured_network
+            ));
+        }
 
         // Create an BtcSignature from the string. This validates the signature.
         let signature = BtcSignature(signature);
@@ -42,7 +60,7 @@ fn siwb_login(
 
         let login_response = ic_siwb::login::login(
             &signature,
-            &address.address_raw,
+            &address_raw,
             public_key,
             session_key,
             &mut *signature_map,
@@ -63,7 +81,7 @@ fn siwb_login(
         // Store the mapping of principal to Bitcoin address and vice versa if the settings allow it.
         manage_principal_address_mappings(
             &principal,
-            &AddressScriptBuf(address.script_buf.to_bytes()),
+            &AddressScriptBuf(script_buf.to_bytes()),
         );
 
         Ok(login_response)

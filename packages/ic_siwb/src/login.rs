@@ -75,6 +75,23 @@ pub struct BtcSignature(pub String);
 /// let message = prepare_login(&address).unwrap();
 /// ```
 pub fn prepare_login(address: &Address) -> Result<SiwbMessage, BtcError> {
+    // Check if the address network matches the configured network in settings
+    // Parse the address to get network information
+    let address_str = address.to_string();
+    let address_info = get_script_from_address(address_str)
+        .map_err(|e| BtcError::AddressFormatError(e))?;
+    
+    let configured_network = with_settings!(|settings: &Settings| {
+        settings.network
+    });
+    
+    if address_info.network != configured_network {
+        return Err(BtcError::AddressFormatError(format!(
+            "Address network mismatch: address is {:?} but settings network is {:?}",
+            address_info.network, configured_network
+        )));
+    }
+
     let message = SiwbMessage::new(address);
 
     // Save the SIWB message for use in the login call
@@ -164,6 +181,23 @@ pub fn login(
     canister_id: &Principal,
     sign_message_type: SignMessageType,
 ) -> Result<LoginDetails, LoginError> {
+    // Check if the address network matches the configured network in settings
+    // Parse the address to get network information
+    let address_str = address.to_string();
+    let address_info = get_script_from_address(address_str)
+        .map_err(|e| LoginError::BtcError(BtcError::AddressFormatError(e)))?;
+    
+    let configured_network = with_settings!(|settings: &Settings| {
+        settings.network
+    });
+    
+    if address_info.network != configured_network {
+        return Err(LoginError::BtcError(BtcError::AddressFormatError(format!(
+            "Address network mismatch: address is {:?} but settings network is {:?}",
+            address_info.network, configured_network
+        ))));
+    }
+
     // Remove expired SIWB messages from the state before proceeding. The init settings determines
     // the time to live for SIWB messages.
     SIWB_MESSAGES.with_borrow_mut(|siwb_messages| {

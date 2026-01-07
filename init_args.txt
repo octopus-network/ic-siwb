@@ -1,0 +1,10 @@
+(
+    record {
+        domain = "https://satsman.fun";
+        uri = "https://satsman.fun";
+        salt = "satsman-mainnet";
+        network = opt "bitcoin";
+        scheme = opt "https";
+        session_expires_in = opt (86400_000_000_000 : nat64)
+    }
+)
